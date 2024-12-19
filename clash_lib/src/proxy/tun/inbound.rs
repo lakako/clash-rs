@@ -4,7 +4,7 @@ use std::{net::SocketAddr, sync::Arc};
 use futures::{SinkExt, StreamExt};
 
 use tracing::{debug, error, info, trace, warn};
-use tun::{Device, TunPacket};
+use tun::AbstractDevice;
 use url::Url;
 
 use crate::{
@@ -224,7 +224,7 @@ pub fn get_runner(
         }
         "dev" => {
             let dev = u.host().expect("tun dev must be provided").to_string();
-            tun_cfg.name(dev);
+            tun_cfg.tun_name(dev);
         }
         _ => {
             return Err(Error::InvalidConfig(format!(
@@ -238,13 +238,14 @@ pub fn get_runner(
     tun_cfg
         .address(gw.addr())
         .netmask(gw.netmask())
-        .mtu(cfg.mtu.unwrap_or(if cfg!(windows) { 65535 } else { 1500 }))
+        .mtu(cfg.mtu.unwrap_or(if cfg!(windows) { 65535u16 } else { 1500u16 }))
         .up();
+
 
     let tun = tun::create_as_async(&tun_cfg)
         .map_err(|x| new_io_error(format!("failed to create tun device: {}", x)))?;
 
-    let tun_name = tun.get_ref().name().map_err(map_io_error)?;
+    let tun_name = tun.tun_name().map_err(map_io_error)?;
     info!("tun started at {}", tun_name);
 
     let mut cfg = cfg;
@@ -282,7 +283,7 @@ pub fn get_runner(
             while let Some(pkt) = stack_stream.next().await {
                 match pkt {
                     Ok(pkt) => {
-                        if let Err(e) = tun_sink.send(TunPacket::new(pkt)).await {
+                        if let Err(e) = tun_sink.send(pkt).await {
                             error!("failed to send pkt to tun: {}", e);
                             break;
                         }
@@ -303,7 +304,7 @@ pub fn get_runner(
                 match pkt {
                     Ok(pkt) => {
                         if let Err(e) =
-                            stack_sink.send(pkt.into_bytes().into()).await
+                            stack_sink.send(pkt.into()).await
                         {
                             error!("failed to send pkt to stack: {}", e);
                             break;
