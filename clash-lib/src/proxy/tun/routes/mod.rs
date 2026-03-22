@@ -19,11 +19,18 @@ use linux::add_route;
 #[cfg(target_os = "linux")]
 pub use linux::maybe_routes_clean_up;
 
-#[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
+#[cfg(target_os = "freebsd")]
+mod freebsd;
+#[cfg(target_os = "freebsd")]
+use freebsd::add_route;
+#[cfg(target_os = "freebsd")]
+pub use freebsd::maybe_routes_clean_up;
+
+#[cfg(not(any(windows, target_os = "macos", target_os = "linux", target_os = "freebsd")))]
 mod other;
-#[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
+#[cfg(not(any(windows, target_os = "macos", target_os = "linux", target_os = "freebsd")))]
 use other::add_route;
-#[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
+#[cfg(not(any(windows, target_os = "macos", target_os = "linux", target_os = "freebsd")))]
 pub use other::maybe_routes_clean_up;
 
 use tracing::warn;
@@ -115,6 +122,10 @@ pub fn maybe_add_routes(cfg: &TunConfig, tun_name: &str) -> std::io::Result<()> 
                 #[cfg(target_os = "macos")]
                 {
                     macos::maybe_add_default_route()?;
+                }
+                #[cfg(target_os = "freebsd")]
+                {
+                    freebsd::maybe_add_default_route()?;
                 }
             }
             #[cfg(target_os = "linux")]
